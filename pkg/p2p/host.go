@@ -26,11 +26,13 @@ const OperationTimeout = 30 * time.Second
 
 // HostOptions configures the libp2p host.
 type HostOptions struct {
-	ListenPort  int
-	PrivKeyPath string
-	EnableMDNS  bool
-	RelayAddr   string
-	EnableQUIC  bool
+	ListenPort      int
+	PrivKeyPath     string
+	EnableMDNS      bool
+	RelayAddr       string
+	EnableQUIC      bool
+	EnableWebSocket bool
+	PublicHost      string
 }
 
 // NewHost creates a new libp2p host for CIPHER.
@@ -41,6 +43,9 @@ func NewHost(ctx context.Context, opts HostOptions) (host.Host, error) {
 	}
 
 	listenAddr := fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", opts.ListenPort)
+	if opts.EnableWebSocket {
+		listenAddr = fmt.Sprintf("/ip4/0.0.0.0/tcp/%d/ws", opts.ListenPort)
+	}
 	listenAddrs := []string{listenAddr}
 	if opts.EnableQUIC {
 		listenAddrs = append(listenAddrs, fmt.Sprintf("/ip4/0.0.0.0/udp/%d/quic-v1", opts.ListenPort))
@@ -53,6 +58,15 @@ func NewHost(ctx context.Context, opts HostOptions) (host.Host, error) {
 		libp2p.Transport(ws.New),
 		libp2p.EnableRelay(),
 		libp2p.EnableHolePunching(),
+	}
+	if opts.PublicHost != "" {
+		publicAddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/dns4/%s/tcp/443/wss", opts.PublicHost))
+		if err != nil {
+			return nil, fmt.Errorf("invalid public host %q: %w", opts.PublicHost, err)
+		}
+		libp2pOpts = append(libp2pOpts, libp2p.AddrsFactory(func(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
+			return append(addrs, publicAddr)
+		}))
 	}
 	if opts.EnableQUIC {
 		libp2pOpts = append(libp2pOpts, libp2p.Transport(quic.NewTransport))
@@ -103,6 +117,18 @@ func NewHost(ctx context.Context, opts HostOptions) (host.Host, error) {
 // loadOrGeneratePrivateKey loads an Ed25519 private key from a file,
 // or generates a new one and saves it if the file doesn't exist.
 func loadOrGeneratePrivateKey(path string) (crypto.PrivKey, error) {
+	if keyData := os.Getenv("CIPHER_LIBP2P_PRIVKEY"); keyData != "" {
+		decoded, err := base64.StdEncoding.DecodeString(keyData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode CIPHER_LIBP2P_PRIVKEY: %w", err)
+		}
+		priv, err := crypto.UnmarshalPrivateKey(decoded)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse CIPHER_LIBP2P_PRIVKEY: %w", err)
+		}
+		return priv, nil
+	}
+
 	if path == "" {
 		// Generate an ephemeral key if no path provided
 		priv, _, err := crypto.GenerateKeyPairWithReader(crypto.Ed25519, -1, rand.Reader)

@@ -19,6 +19,7 @@ func main() {
 	relayAddr := flag.String("relay", "", "Relay multiaddr to connect to (optional)")
 	verbose := flag.Bool("verbose", false, "Enable verbose debug logging")
 	enableQUIC := flag.Bool("quic", false, "Enable QUIC transport")
+	enableMDNS := flag.Bool("mdns", true, "Enable mDNS discovery")
 	flag.Parse()
 
 	cfg := logger.DefaultConfig()
@@ -51,7 +52,7 @@ func main() {
 	opts := p2p.HostOptions{
 		ListenPort:  0,
 		PrivKeyPath: "client_key.key",
-		EnableMDNS:  true,
+		EnableMDNS:  *enableMDNS,
 		RelayAddr:   *relayAddr,
 		EnableQUIC:  *enableQUIC,
 	}

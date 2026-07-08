@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	"github.com/1amKhush/CIPHER/pkg/chunker"
@@ -18,10 +19,13 @@ import (
 )
 
 func main() {
-	port := flag.Int("port", 9000, "Port to listen on")
+	port := flag.Int("port", defaultPort(), "Port to listen on")
 	relayAddr := flag.String("relay", "", "Relay multiaddr to connect to (optional)")
 	verbose := flag.Bool("verbose", false, "Enable verbose debug logging")
 	enableQUIC := flag.Bool("quic", false, "Enable QUIC transport")
+	enableMDNS := flag.Bool("mdns", true, "Enable mDNS discovery")
+	enableWebSocket := flag.Bool("ws", false, "Listen with WebSocket transport")
+	publicHost := flag.String("public-host", "", "Public host to announce, for example cipher-provider.onrender.com")
 	flag.Parse()
 
 	cfg := logger.DefaultConfig()
@@ -73,11 +77,13 @@ func main() {
 
 	// 4. Start libp2p host
 	opts := p2p.HostOptions{
-		ListenPort:  *port,
-		PrivKeyPath: "provider_key.key",
-		EnableMDNS:  true,
-		RelayAddr:   *relayAddr,
-		EnableQUIC:  *enableQUIC,
+		ListenPort:      *port,
+		PrivKeyPath:     "provider_key.key",
+		EnableMDNS:      *enableMDNS,
+		RelayAddr:       *relayAddr,
+		EnableQUIC:      *enableQUIC,
+		EnableWebSocket: *enableWebSocket,
+		PublicHost:      *publicHost,
 	}
 	startupCtx, cancelStartup := context.WithTimeout(context.Background(), p2p.OperationTimeout)
 	defer cancelStartup()
@@ -100,4 +106,16 @@ func main() {
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 	<-ch
 	fmt.Println("Shutting down...")
+}
+
+func defaultPort() int {
+	portText := os.Getenv("PORT")
+	if portText == "" {
+		return 9000
+	}
+	port, err := strconv.Atoi(portText)
+	if err != nil {
+		return 9000
+	}
+	return port
 }
