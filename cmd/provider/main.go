@@ -17,6 +17,7 @@ import (
 	"github.com/1amKhush/CIPHER/pkg/engine"
 	"github.com/1amKhush/CIPHER/pkg/logger"
 	"github.com/1amKhush/CIPHER/pkg/p2p"
+	"github.com/1amKhush/CIPHER/pkg/ethereum"
 	
 )
 
@@ -101,8 +102,13 @@ func main() {
 		logger.Info().Msgf("Provider Address: %s/p2p/%s", addr, h.ID())
 	}
 
+	// Register provider identity before serving requests.
+	if err := ethereum.RegisterProvider(h); err != nil {
+		logger.Fatal().Err(err).Msg("Provider registration failed")
+	}
+
 	// 5. Register Handler
-	h.SetStreamHandler(p2p.ProtocolID, p2p.ProviderStreamHandler(store))
+	h.SetStreamHandler(p2p.ProtocolID, p2p.ProviderStreamHandler(store,h))
 
 	// 6. Wait for sigint
 	ch := make(chan os.Signal, 1)
